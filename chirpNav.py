@@ -2,23 +2,24 @@
 ## V.J.Sahakian 13 Nov. 2014
 
 def cnav2king(cnavfile):
-#Convert CHIRP nav files to Kingdom lat/lon, save them in a subdirectory of the 
-#nav directory: /nav/kingdom/LL
-#VJS 11 November 2014
-#
-#CHIRP format:
-#   CHIRP line name   Shot?   X/Lon   Y/Lat   Time?
-#Convert to:
-#   Shot   X/Lon   Y/Lat
-#Usage:
-#   First create subdirectory /kingdom/LL 
-#   cnavfile:   string with path to the chirp nav file you wish to convert
-#               should end in .txt, .nav, etc. (cnavfile.txt)
-#
-#Output:
-#   places in subdirectory /kingdom/LL,
-#   named cnavfile.ll
+    '''
+    Convert CHIRP nav files to Kingdom lat/lon, save them in a subdirectory of the 
+    nav directory: /nav/kingdom/LL
+    VJS 11 November 2014
     
+    CHIRP format:
+        CHIRP line name   Shot?   X/Lon   Y/Lat   Time?
+    Convert to:
+        Shot   X/Lon   Y/Lat
+    Usage:
+        First create subdirectory /kingdom/LL 
+        cnavfile:   string with path to the chirp nav file you wish to convert
+                    should end in .txt, .nav, etc. (cnavfile.txt)
+        
+    Output:
+        places in subdirectory /kingdom/LL,
+        named cnavfile.ll
+    '''    
     import numpy as np
     from os import path
     
