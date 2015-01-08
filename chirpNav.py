@@ -44,19 +44,20 @@ def cnav2king(cnavfile):
     
     
 def ll2utm(LLfile,numskip):
-#Convert lat/lon kingdom format files (Shot Lon Lat) to UTM
-#Save in a subdirectory - /kingdom/UTM
-#
-#Format of kingdom file:
-#   Shot   Lon   Lat
-#
-#Usage:
-#   LLfile:         path of lat/lon kingdom file to convert
-#   numskip:        number of characters to skip at the end of the path, i.e.,
-#                   want them to be saved in a directory UTM at the same level 
-#                   that they're in (so if they're in kingdom/LL/, want them to
-#                   be in kingdom/UTM/ - so would skip 3 characters, LL/)
-
+    '''
+    Convert lat/lon kingdom format files (Shot Lon Lat) to UTM
+    Save in a subdirectory - /kingdom/UTM
+    
+    Format of kingdom file:
+        Shot   Lon   Lat
+        
+    Usage:
+        LLfile:         path of lat/lon kingdom file to convert
+        numskip:        number of characters to skip at the end of the path, i.e.,
+                        want them to be saved in a directory UTM at the same level 
+                        that they're in (so if they're in kingdom/LL/, want them to
+                        be in kingdom/UTM/ - so would skip 3 characters, LL/)
+    '''
     import numpy as np
     import utm
     from os import path
@@ -83,17 +84,19 @@ def ll2utm(LLfile,numskip):
     
     
 def shannon2king(globfile):
-#Runs by inputting a glob file of shannon's nav files to shannon2king
-#Before running, make a glob file for each - then run shannon2king on teh glob
-#file.  This puts them all in the dir: xys/kingdom/LL
-#**Create subdirectory /kingdom/LL in the same directory as latlon.xys!!
-#
-#Usage:
-#   globfile:   array, each entry is a path name to convert
-#Output:
-#   line.ll:    kingdom lat/lon file, saved in subdir kingdom/LL
-#
-
+    '''
+    Runs by inputting a glob file of shannon's nav files to shannon2king
+    Before running, make a glob file for each - then run shannon2king on teh glob
+    file.  This puts them all in the dir: xys/kingdom/LL
+    
+    **Create subdirectory /kingdom/LL in the same directory as latlon.xys!!
+    
+    Usage:
+        globfile:   array, each entry is a path name to convert
+    Output:
+        line.ll:    kingdom lat/lon file, saved in subdir kingdom/LL
+    
+    '''
     import numpy as np
     from os import path
     from glob import glob
