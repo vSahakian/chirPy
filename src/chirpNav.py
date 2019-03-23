@@ -117,7 +117,54 @@ def shannon2king(globfile):
         
         #Write to file
         kingformat=np.c_[shot,lon,lat]
-        np.savetxt(kingPath,kingformat,fmt='%7i\t%11.6f\t%9.6f')    
+        np.savetxt(kingPath,kingformat,fmt='%7i\t%11.6f\t%9.6f') 
+        
+
+def nmea2list(nmea_filepath):
+    '''
+    Open a NMEA file and put it into a list
+    Input:
+        nmea_filepath:      String with path to NMEA file
+    Output:
+        nmea_list:          List with strings of each line of the NMEA file
+    '''
+
+    ## Open the file:
+    nmea_file = open(nmea_filepath)
+    
+    ## Read in each line, and strip the newline character, save in a list:
+    nmea_lines = [line.rstrip('\n') for line in nmea_file]
+    
+    ## Close file:
+    nmea_file.close()
+    
+    ## Return the list:
+    return nmea_lines
+    
+    
+def altus_splitgga_gll(nmea_list,format_list):
+    '''
+    '''
+    
+    ## Make separate lists for formats:
+    all_lists = []
+    
+    for format_i in range(len(format_list)):
+        i_format_list = []
+        i_format = format_list[format_i]
+        
+        ## Loop over lines in original list:
+        for line_j in range(len(nmea_list)):
+            j_line = nmea_list[line_j]
+            if j_line.split(',')[0] == i_format:
+                i_format_list.append(j_line)
+        
+        ## Append this format to the main list:
+        all_lists.append(i_format_list)
+        
+
+                
+        
 
     
 
