@@ -144,6 +144,16 @@ def nmea2list(nmea_filepath):
     
 def altus_splitgga_gll(nmea_list,format_list):
     '''
+    Take a list of position entries from the altus, and split into
+    separate lists for each type of file format.
+    Input:
+        nmea_list:      List with each line of an altus nma output file
+        format_list:    List with the strings (e.g., '$GPGGA') for each type of
+                            output to split out
+    Output: 
+        all_lists:      List with sub-lists, number of those equal to 
+                            len(format_list), each one containing only the 
+                            entries for each nmea format type.
     '''
     
     ## Make separate lists for formats:
@@ -162,10 +172,137 @@ def altus_splitgga_gll(nmea_list,format_list):
         ## Append this format to the main list:
         all_lists.append(i_format_list)
         
-
-                
+    ## Return:
+    return all_lists
         
 
+                
+def match_segy_nav(segy_stream,large_shot_nav_list,utm_zone,unitscalar):
+    '''
+    Take a large shot nav list, and replace a segy stream object's nav with 
+    the values from the shot list
+    Input:
+        segy_stream:              Segy stream object, read in with obs.io.segy.core._read_segy(segypath,unpack_trace_headers=True) 
+        large_shot_nav_list:      Pandas DF with nav info for the segy_stream, and all other lines, columns: shots_utcdatetime,lon,lat,elevation_km
+        utm_zone:                 String with the UTM zone
+        unitscalar:               Integer to use to multiply the UTM coordinates by. will be saved to 
+                                    "scalar_to_be_applied_to_all_coordinates" in the EBCDIC header, so future
+                                    processing should divide by this number to get the real units.
+    Output:
+        navcorrected_segystream:  Segy stream object with corrected nav
+        shot_info:                Pandas dataframe with 
+    '''        
     
 
+    import numpy as np
+    from pyproj import Proj
+    import pandas as pd
+    
+    print('Replacing nav, using UTM zone ' + utm_zone + ', and unit scalar ' + np.str(unitscalar))
+    
+    ## Get the utc date values:
+    utc_datetimes = large_shot_nav_list['shots_utcdatetime'].values
+    
+    ## Make a copy of the segy:
+    navcorrected_segystream = segy_stream.copy()
+    
+    #Make projection object to convert lon/lats to utm:
+    p = Proj(proj='utm',zone=utm_zone,ellps='WGS84')
+    
+    ## Make emtpy arrays to write out:
+    shot = np.array([])
+    lon = np.array([])
+    lat = np.array([])
+    elev = np.array([])
+    x = np.array([])
+    y = np.array([])
 
+    ## Loop over the traces and pull out timing:
+    for i_tracen in range(len(segy_stream)):
+        if i_tracen % 1000 == 0:
+            print('Replacing nav for trace ' +np.str(i_tracen))
+            
+        i_trace = segy_stream[i_tracen]
+        i_shot_time = i_trace.stats['starttime']
+        
+        ## Get the shot number from the segy:
+        i_shot = i_trace.stats.segy.trace_header['trace_sequence_number_within_line']
+        
+        ## Find where this time is in the larger list:
+        i_navcorrect_time_ind = np.where(utc_datetimes == i_shot_time)[0]
+        
+        ## Get nav info from that list for this shot time:
+        i_lon = large_shot_nav_list.loc[i_navcorrect_time_ind]['lon'].values[0]
+        i_lat = large_shot_nav_list.loc[i_navcorrect_time_ind]['lat'].values[0]
+        i_elev = large_shot_nav_list.loc[i_navcorrect_time_ind]['elevation_km'].values[0]
+        
+        ## Append to larger arrays:
+        lon = np.append(lon,i_lon)
+        lat = np.append(lat,i_lat)
+        ## elevation here is in km
+        elev = np.append(elev,i_elev)
+        shot = np.append(shot,i_shot)
+        
+        #Project:
+        i_x,i_y=p(i_lon,i_lat)
+        
+        ## Add to larger arrays:
+        x = np.append(x,i_x)
+        y = np.append(y,i_y)
+        
+        ## Get elevation scalar:
+        elev_scalar = segy_stream[i_tracen].stats.segy.trace_header['scalar_to_be_applied_to_all_elevations_and_depths']
+        
+        ## Replace the EBCDIC header info with this - also multipy by the unit scalar, and make an integer:
+        navcorrected_segystream[i_tracen].stats.segy.trace_header['source_coordinate_x'] = np.int(i_x*unitscalar)
+        navcorrected_segystream[i_tracen].stats.segy.trace_header['source_coordinate_y'] = np.int(i_y*unitscalar)
+        navcorrected_segystream[i_tracen].stats.segy.trace_header['group_coordinate_x'] = np.int(i_x*unitscalar)
+        navcorrected_segystream[i_tracen].stats.segy.trace_header['group_coordinate_y'] = np.int(i_y*unitscalar)
+        
+        ## Multiply elevations by existing elevation scalar, to match the water depth etc. that exists - and first put elevation into m from km:
+        navcorrected_segystream[i_tracen].stats.segy.trace_header['surface_elevation_at_source'] = np.int((i_elev*1000)*elev_scalar)
+        navcorrected_segystream[i_tracen].stats.segy.trace_header['receiver_group_elevation'] = np.int((i_elev*1000)*elev_scalar)
+        ## Save this unit scalar to what is applied to all coordinates, future processing should divide by this:
+        navcorrected_segystream[i_tracen].stats.segy.trace_header['scalar_to_be_applied_to_all_coordinates'] = unitscalar
+        
+        ## Also make the units meters:
+        navcorrected_segystream[i_tracen].stats.segy.trace_header['coordinate_units'] = 1 # 1 is used for meters and feet, 2 for arcseconds
+
+    ## Make a list of the nav info to return:
+    shot_info_dict = {'shot':shot, 'lon':lon, 'lat':lat, 'elevation':elev, 'utm_x':x, 'utm_y':y}
+    shot_info = pd.DataFrame(shot_info_dict)
+    
+    ## Return the segystream, and also the list of corrected info:
+    return navcorrected_segystream, shot_info
+    
+    
+    
+    
+def create_text_header(lines):
+    """Format textual header
+    Create a "correct" SEG-Y textual header.  Every line will be prefixed with
+    C##, are each 80 bytes long total, and there are 40 lines. 
+    The input must be a dictionary with the line
+    number[1-40] as a key. The value for each key should be up to 76 character
+    long string.
+    Parameters
+    ----------
+    lines : dict
+        `lines` dictionary with fields:
+        - ``no`` : line number (`int`)
+        - ``line`` : line (`str`)
+    Returns
+    -------
+    text : str
+    """
+
+    rows = []
+    for line_no in range(1, 41):
+        line = ""
+        if line_no in lines:
+            line = lines[line_no]
+        row = "C{0:>2} {1:76}".format(line_no, line)
+        rows.append(row)
+
+    rows = ''.join(rows)
+    return rows
