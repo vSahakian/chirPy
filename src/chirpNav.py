@@ -177,17 +177,19 @@ def altus_splitgga_gll(nmea_list,format_list):
         
 
                 
-def match_segy_nav(segy_stream,large_shot_nav_list,utm_zone,unitscalar):
+def match_segy_nav(segy_stream,large_shot_nav_list,utm_zone,unitscalar,number_samples_per_trace,linename):
     '''
     Take a large shot nav list, and replace a segy stream object's nav with 
     the values from the shot list
     Input:
         segy_stream:              Segy stream object, read in with obs.io.segy.core._read_segy(segypath,unpack_trace_headers=True) 
-        large_shot_nav_list:      Pandas DF with nav info for the segy_stream, and all other lines, columns: shots_utcdatetime,lon,lat,elevation_km
+        large_shot_nav_list:      Pandas DF with nav info for the segy_stream, and all other lines, columns: shots_utcdatetime,lon,lat,elevation_m
         utm_zone:                 String with the UTM zone
         unitscalar:               Integer to use to multiply the UTM coordinates by. will be saved to 
                                     "scalar_to_be_applied_to_all_coordinates" in the EBCDIC header, so future
                                     processing should divide by this number to get the real units.
+        number_samples_per_trace: Integer with the number of samples per trace for the line for header
+        linename:                 String with linename for header
     Output:
         navcorrected_segystream:  Segy stream object with corrected nav
         shot_info:                Pandas dataframe with 
@@ -234,7 +236,7 @@ def match_segy_nav(segy_stream,large_shot_nav_list,utm_zone,unitscalar):
         ## Get nav info from that list for this shot time:
         i_lon = large_shot_nav_list.loc[i_navcorrect_time_ind]['lon'].values[0]
         i_lat = large_shot_nav_list.loc[i_navcorrect_time_ind]['lat'].values[0]
-        i_elev = large_shot_nav_list.loc[i_navcorrect_time_ind]['elevation_km'].values[0]
+        i_elev = large_shot_nav_list.loc[i_navcorrect_time_ind]['elevation_m'].values[0]
         
         ## Append to larger arrays:
         lon = np.append(lon,i_lon)
@@ -253,23 +255,52 @@ def match_segy_nav(segy_stream,large_shot_nav_list,utm_zone,unitscalar):
         ## Get elevation scalar:
         elev_scalar = segy_stream[i_tracen].stats.segy.trace_header['scalar_to_be_applied_to_all_elevations_and_depths']
         
-        ## Replace the EBCDIC header info with this - also multipy by the unit scalar, and make an integer:
+        ## Replace the trace header info with this - also multipy by the unit scalar, and make an integer:
         navcorrected_segystream[i_tracen].stats.segy.trace_header['source_coordinate_x'] = np.int(i_x*unitscalar)
         navcorrected_segystream[i_tracen].stats.segy.trace_header['source_coordinate_y'] = np.int(i_y*unitscalar)
         navcorrected_segystream[i_tracen].stats.segy.trace_header['group_coordinate_x'] = np.int(i_x*unitscalar)
         navcorrected_segystream[i_tracen].stats.segy.trace_header['group_coordinate_y'] = np.int(i_y*unitscalar)
         
-        ## Multiply elevations by existing elevation scalar, to match the water depth etc. that exists - and first put elevation into m from km:
-        navcorrected_segystream[i_tracen].stats.segy.trace_header['surface_elevation_at_source'] = np.int((i_elev*1000)*elev_scalar)
-        navcorrected_segystream[i_tracen].stats.segy.trace_header['receiver_group_elevation'] = np.int((i_elev*1000)*elev_scalar)
+        ## Multiply elevations by existing elevation scalar, to match the water depth etc. that exists:
+        navcorrected_segystream[i_tracen].stats.segy.trace_header['surface_elevation_at_source'] = np.int(i_elev*elev_scalar)
+        navcorrected_segystream[i_tracen].stats.segy.trace_header['receiver_group_elevation'] = np.int(i_elev*elev_scalar)
         ## Save this unit scalar to what is applied to all coordinates, future processing should divide by this:
         navcorrected_segystream[i_tracen].stats.segy.trace_header['scalar_to_be_applied_to_all_coordinates'] = unitscalar
         
         ## Also make the units meters:
         navcorrected_segystream[i_tracen].stats.segy.trace_header['coordinate_units'] = 1 # 1 is used for meters and feet, 2 for arcseconds
-
+       
+        
+    ## Make EBCDIC header.... keep same information from all of them, but change:
+    #   the line name
+    #   force number of samples to be all the same, defined above
+    #   
+    header_dict = {1:'CLIENT UCSD-SIO              COMPANY  IGPP                  CREW NO 0', 
+                   2:'LINE '+ linename, 3:'REEL NO 1         DAY-START OF REEL 800 YEAR 2019 OBSERVER', 
+                   4:'INSTRUMENT:  Edgetech      MODEL JStar      SERIAL NO', 
+                   5:'DATA TRACES/RECORD        AUXILIARY TRACES/RECORD         CDP FOLD', 
+                   6:'SAMPLE INTERVAL 46      SAMPLES/TRACE  '+ np.str(number_samples_per_trace) + '  BITS/IN      BYTES/SAMPLE  4',
+                   7:'RECORDING FORMAT 1      FORMAT THIS REEL        MEASUREMENT SYSTEM',
+                   8:'SAMPLE CODE: IEEE Floating Point',9:'GAIN TYPE: ',
+                   10:'FILTERS: ALIAS     HZ  NOTCH     HZ  BAND           HZ  SLOPE        DB/OCT', 
+                   11:'SOURCE:                 NUMBER/POINT         POINT INTERVAL',
+                   12:'PATTERN:                               LENGTH        WIDTH', 
+                   13:'SWEEP:       700\x00HZ     3000 HZ  LENGTH 50   MS  CHANNEL NO     TYPE', 
+                   14:'TAPER:                    MS                   MS  TYPE', 15:'SPREAD: ', 
+                   16:'GEOPHONES: ', 17:'PATTERN: ', 18:'TRACES SORTED BY: RECORD  ', 19:'AMPLITUDE RECOVERY:',  
+                   20:'MAP PROJECTION', 21:'PROCESSING:', 
+                   22:'ACOUSTIC SOURCE: Edgetech FSSB\x00\x00\x00\x00\x00\x00\x00     FIRE RATE:         SECS', 
+                   23:' ', 24:' ', 25:' ', 26:' ', 27:' ', 28:' ', 29:' ', 30:' ', 31:' ', 32:' ', 33:' ', 
+                   34:' ', 35:' ', 36:' ', 37:' ', 38:'Big Endian Byte Order', 39:'SEG Y REV1', 40:'END EBCDIC'}
+    
+    header_string = create_text_header(header_dict)
+    print(header_string)
+        
+    ## Also make sure the BINARY HEADER has the correct number of samples, define above
+    navcorrected_segystream.stats.binary_file_header['number_of_samples_per_data_trace'] = number_samples_per_trace
+        
     ## Make a list of the nav info to return:
-    shot_info_dict = {'shot':shot, 'lon':lon, 'lat':lat, 'elevation':elev, 'utm_x':x, 'utm_y':y}
+    shot_info_dict = {'shot':shot, 'lon':lon, 'lat':lat, 'elevation_m':elev, 'utm_x':x, 'utm_y':y}
     shot_info = pd.DataFrame(shot_info_dict)
     
     ## Return the segystream, and also the list of corrected info:
