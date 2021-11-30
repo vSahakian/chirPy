@@ -264,8 +264,9 @@ def match_segy_nav(segy_stream,large_shot_nav_list,utm_zone,unitscalar,number_sa
         ## Multiply elevations by existing elevation scalar, to match the water depth etc. that exists:
         navcorrected_segystream[i_tracen].stats.segy.trace_header['surface_elevation_at_source'] = np.int(i_elev*elev_scalar)
         navcorrected_segystream[i_tracen].stats.segy.trace_header['receiver_group_elevation'] = np.int(i_elev*elev_scalar)
-        ## Save this unit scalar to what is applied to all coordinates, future processing should divide by this:
-        navcorrected_segystream[i_tracen].stats.segy.trace_header['scalar_to_be_applied_to_all_coordinates'] = unitscalar
+        ## Save this unit scalar to what is applied to all coordinates, future processing should divide by this.
+        ## Because future processing should divide by this, the number should be stored as a NEGATIVE number:
+        navcorrected_segystream[i_tracen].stats.segy.trace_header['scalar_to_be_applied_to_all_coordinates'] = -1*unitscalar
         
         ## Also make the units meters:
         navcorrected_segystream[i_tracen].stats.segy.trace_header['coordinate_units'] = 1 # 1 is used for meters and feet, 2 for arcseconds
@@ -276,7 +277,7 @@ def match_segy_nav(segy_stream,large_shot_nav_list,utm_zone,unitscalar,number_sa
     #   force number of samples to be all the same, defined above
     #   
     header_dict = {1:'CLIENT UCSD-SIO              COMPANY  IGPP                  CREW NO 0', 
-                   2:'LINE '+ linename, 3:'REEL NO 1         DAY-START OF REEL 800 YEAR 2019 OBSERVER', 
+                   2:'LINE '+ linename, 3:'REEL NO 1         DAY-START OF REEL ' + navcorrected_segystream.stats.textual_file_header[200:203].decode() + ' YEAR 2019 OBSERVER', 
                    4:'INSTRUMENT:  Edgetech      MODEL JStar      SERIAL NO', 
                    5:'DATA TRACES/RECORD        AUXILIARY TRACES/RECORD         CDP FOLD', 
                    6:'SAMPLE INTERVAL 46      SAMPLES/TRACE  '+ np.str(number_samples_per_trace) + '  BITS/IN      BYTES/SAMPLE  4',
@@ -295,7 +296,10 @@ def match_segy_nav(segy_stream,large_shot_nav_list,utm_zone,unitscalar,number_sa
     
     header_string = create_text_header(header_dict)
     print(header_string)
-        
+    
+    ## Add new header string     
+    navcorrected_segystream.stats.textual_file_header = header_string
+    
     ## Also make sure the BINARY HEADER has the correct number of samples, define above
     navcorrected_segystream.stats.binary_file_header['number_of_samples_per_data_trace'] = number_samples_per_trace
         
